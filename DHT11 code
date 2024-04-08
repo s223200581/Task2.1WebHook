@@ -1,0 +1,78 @@
+#include <WiFiNINA.h>
+
+#include "secrets.h"
+#include "ThingSpeak.h"
+#include "DHT.h"
+
+#define DHTPIN 2     // Digital pin connected to the DHT sensor
+#define DHTTYPE DHT11   // DHT 11
+
+DHT dht(DHTPIN, DHTTYPE);
+
+char ssid[] = SECRET_SSID;   // your network SSID (name) 
+char pass[] = SECRET_PASS;   // your network password
+int keyIndex = 0;            // your network key Index number (needed only for WEP)
+
+WiFiClient client;
+
+unsigned long myChannelNumber = SECRET_CH_ID;
+const char *myWriteAPIKey = SECRET_WRITE_APIKEY;
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
+
+  ThingSpeak.begin(client);  // Initialize ThingSpeak 
+  dht.begin();
+}
+
+void loop() {
+
+  // Reading temperature or humidity
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Failed to read from DHT sensor!");
+    delay(2000);
+    return;
+  }
+
+  // Print temperature and humidity values to serial monitor
+  Serial.print("humidity: ");
+
+  Serial.print(h);
+  Serial.print(" %\t");
+
+  Serial.print("temperature: ");
+  Serial.print(t);
+  Serial.println(" C");
+
+  // Connect or reconnect to WiFi
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.print("Attempting to connect to SSID: ");
+    Serial.println(ssid);
+    while (WiFi.status() != WL_CONNECTED) {
+      WiFi.begin(ssid, pass);  // Connect to WPA/WPA2 network
+      Serial.print(".");
+      delay(5000);
+    }
+    Serial.println("\nConnected.");
+  }
+
+  // Write temperature and humidity data to ThingSpeak
+  ThingSpeak.setField(1, t);  // Field 1 for temperature
+  ThingSpeak.setField(2, h);  // Field 2 for humidity
+
+  int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
+  if (x == 200) {
+    Serial.println("Channel has been updated successfully.");
+  } else {
+    Serial.println("Problem is updating channel. HTTP error code " + String(x));
+  }
+
+  delay(60000); // Wait 60 seconds before next update
+}
